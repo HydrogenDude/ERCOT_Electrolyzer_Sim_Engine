@@ -9,13 +9,32 @@ __pycache__/
 .venv/
 venv/
 
-# ===============================
-# MATLAB
-# ===============================
+
+# =========================
+# MATLAB core artifacts
+# =========================
+
+# Autosave and backup files
 *.asv
-*.m~
-*.mlx.autosave
-*.mat
+*.m~ 
+*.autosave
+
+# MATLAB compiled artifacts
+*.mex*
+*.p
+*.slxc
+
+# MATLAB live editor cache
+*.mlx.bak
+
+# MATLAB code generation
+codegen/
+slprj/
+
+# MATLAB project and path state
+.matlab/
+resources/
+
 
 src/matlab/resources/
 
