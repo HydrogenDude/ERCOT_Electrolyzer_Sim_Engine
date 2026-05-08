@@ -11,7 +11,6 @@ def get_project_root() -> Path:
     """
     Resolve project root using an explicit '.project-root' marker file.
     """
-
     for parent in Path(__file__).resolve().parents:
         if (parent / ".project-root").exists():
             return parent
@@ -22,19 +21,58 @@ def get_project_root() -> Path:
 
 
 # ==========================================================
+# Default supervisory control case
+# ==========================================================
+def default_supervisory_control_case() -> pd.DataFrame:
+    """
+    Deterministic default supervisory control case.
+
+    Used when N == 0 to allow single-case simulations without DOE.
+    Values are chosen to be:
+      - physically reasonable
+      - non-extreme
+      - strictly monotonic and constraint-safe
+    """
+
+    row = {
+        "ID": 1,
+        "min_up_steps": 4,
+        "min_down_steps": 2,
+        "price_start": 30.0,
+        "price_turndown": 50.0,
+        "price_stop": 55.0,
+        "clean_ratio_start": 0.60,
+        "clean_ratio_turndown": 0.50,
+        "clean_ratio_stop": 0.40,
+        "turndown_delay": 2,
+        "recover_delay": 4,
+        "price_delay": 2,
+    }
+
+    return pd.DataFrame([row])
+
+
+# ==========================================================
 # DOE generator (controls only)
 # ==========================================================
 def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
     """
-    Space-filling, constraint-correct DOE for electrolyzer supervisory control.
+    Space-filling, constraint-correct DOE for electrolyzer
+    supervisory control.
 
     Guarantees (row-wise, by construction):
       clean_ratio_stop < clean_ratio_turndown < clean_ratio_start
       price_start < price_turndown < price_stop
+
+    Special behavior:
+      - If N == 0, returns a single deterministic default case.
     """
 
-    if N < 10:
-        raise ValueError("N must be >= 10 for meaningful stratification")
+    # ------------------------------
+    # Default-case override
+    # ------------------------------
+    if N == 0:
+        return default_supervisory_control_case()
 
     rng = np.random.default_rng(seed)
     bounds = control_parameter_bounds()
@@ -92,11 +130,16 @@ def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
 
     T = pd.DataFrame(rows)
 
-    # Decorrelate discrete parameters only
+    # ------------------------------------------------------
+    # Decorrelate discrete parameters (DOE hygiene)
+    # ------------------------------------------------------
     perm = rng.permutation(N)
     cols = [
-        "min_up_steps", "min_down_steps",
-        "turndown_delay", "recover_delay", "price_delay"
+        "min_up_steps",
+        "min_down_steps",
+        "turndown_delay",
+        "recover_delay",
+        "price_delay",
     ]
     T[cols] = T.loc[perm, cols].values
 
@@ -127,8 +170,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate electrolyzer supervisory control DOE cases."
     )
-    parser.add_argument("--N", type=int, default=100)
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--N", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=2)
     parser.add_argument(
         "--filename",
         type=str,
@@ -147,7 +190,10 @@ def main():
     T = generate_supervisory_control_cases(args.N, args.seed)
     T.to_csv(outfile, index=False)
 
-    print(f"[OK] Generated {len(T)} control cases")
+    if args.N == 0:
+        print("[INFO] N = 0 → using single default supervisory control case")
+
+    print(f"[OK] Generated {len(T)} control case(s)")
     print(f"[OK] Written to: {outfile}")
 
 
