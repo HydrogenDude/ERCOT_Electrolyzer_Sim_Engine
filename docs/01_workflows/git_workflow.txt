@@ -1,0 +1,131 @@
+STRATEGIC GIT WORKFLOW – BRANCHES AND TAGS
+=========================================
+
+PURPOSE
+-------
+Use Git to manage uncertainty (branches) and lock in certainty (tags).
+Main is always stable. Experimental work never lives on main.
+
+
+BASIC SETUP
+-----------
+1. Initialize repository
+   git init
+
+2. Create or rename main branch
+   git branch -M main
+
+3. Main branch rule
+   - main must always run
+   - main must always be defensible
+   - no direct experimental commits
+
+
+BRANCH STRATEGY
+---------------
+Rule: If work is uncertain or incomplete, use a branch.
+
+1. Create a feature branch
+   git checkout -b feature/short-descriptive-name
+
+   Examples:
+   feature/add-hydrogen-dispatch
+   feature/refactor-load-model
+   fix/battery-soc-bug
+
+2. Work only on the branch
+   - Make small, logical commits
+   - Each commit should explain what and why
+
+3. Commit format
+   git commit -m "Clear description of change"
+
+   Good:
+   "Add electrolyzer ramp-rate constraints"
+   "Fix load normalization during heat waves"
+
+   Bad:
+   "updates"
+   "fix"
+   "final v2"
+
+4. Merge branch when uncertainty is resolved
+   git checkout main
+   git merge --no-ff feature/branch-name
+
+5. Delete branch after merge (optional but recommended)
+   git branch -d feature/branch-name
+
+
+COMMIT STRATEGY
+---------------
+Rule: Commits tell a story.
+
+- One logical change per commit
+- Commit messages must make sense months later
+- Avoid large “dump” commits
+- Do not commit broken code to main
+
+
+TAG STRATEGY
+------------
+Rule: Tag certainty. Tags do not move.
+
+Use tags when something is:
+- Reproducible
+- Publishable
+- Shared
+- Referenced in a report, paper, or thesis
+
+1. Create an annotated tag
+   git tag -a v1.0.0 -m "Stable baseline model"
+
+2. Push tags
+   git push origin v1.0.0
+
+3. Common tag styles
+   v1.0.0
+   v1.1.0
+   baseline-no-events
+   thesis-submission
+   paper-figures-final
+
+
+VERSIONING (RECOMMENDED)
+------------------------
+Use semantic versioning:
+MAJOR.MINOR.PATCH
+
+- MAJOR: breaks assumptions or API
+- MINOR: adds features, same assumptions
+- PATCH: bug fixes only
+
+Examples:
+v1.0.0  first stable version
+v1.1.0  new dispatch feature
+v1.1.1  bug fix
+
+
+MENTAL MODEL
+------------
+Branch = workspace for uncertainty
+Tag    = bookmark for certainty
+Main   = source of truth
+
+
+RULES TO LIVE BY
+----------------
+1. If unsure, create a branch
+2. If important, tag it
+3. If broken, don’t merge it
+4. If you can’t explain the commit, rewrite it
+5. Git history should tell a clear story
+
+
+RECOMMENDED SIMPLE WORKFLOW (SOLO / RESEARCH)
+---------------------------------------------
+main (always stable)
+ |
+ +-- feature branches (short-lived)
+ |
+ +-- tags for milestones and results
