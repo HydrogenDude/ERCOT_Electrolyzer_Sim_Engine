@@ -129,6 +129,8 @@ renewable_ratio = safe_divide(renewable_MW, total_MW);
 % -------------------------------
 signals.clean_ratio       = clean_ratio;
 signals.renewable_ratio   = renewable_ratio;
+signals.price             = inputs.price;
+
 
 signals.total_MW           = total_MW;
 signals.renewable_MW       = renewable_MW;
@@ -138,11 +140,3 @@ signals.nonrenewable_MW    = nonrenewable_MW;
 end
 
 
-% ==============================================================
-% Utility: Safe division
-% ==============================================================
-function y = safe_divide(a, b)
-y = zeros(size(a));
-mask = b > 0;
-y(mask) = a(mask) ./ b(mask);
-end
