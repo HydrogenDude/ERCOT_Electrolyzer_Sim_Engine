@@ -24,7 +24,7 @@ def get_project_root() -> Path:
 # ==========================================================
 # DOE generator (controls only)
 # ==========================================================
-def generate_electrolyzer_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
+def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
     """
     Space-filling, constraint-correct DOE for electrolyzer supervisory control.
 
@@ -132,7 +132,7 @@ def main():
     parser.add_argument(
         "--filename",
         type=str,
-        default="electrolyzer_control_cases.csv",
+        default="supervisory_control_cases.csv",
         help="Output CSV filename (written to configs/paper_cases/)",
     )
 
@@ -144,7 +144,7 @@ def main():
 
     outfile = output_dir / args.filename
 
-    T = generate_electrolyzer_control_cases(args.N, args.seed)
+    T = generate_supervisory_control_cases(args.N, args.seed)
     T.to_csv(outfile, index=False)
 
     print(f"[OK] Generated {len(T)} control cases")
