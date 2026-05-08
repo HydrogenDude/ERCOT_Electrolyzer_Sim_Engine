@@ -32,11 +32,9 @@ codegen/
 slprj/
 
 # MATLAB project and path state
-.matlab/
-resources/
-
-
+src/matlab/.matlab/
 src/matlab/resources/
+
 
 # ===============================
 # OS junk
