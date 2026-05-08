@@ -17,6 +17,8 @@ venv/
 *.mlx.autosave
 *.mat
 
+src/matlab/resources/
+
 # ===============================
 # OS junk
 # ===============================
