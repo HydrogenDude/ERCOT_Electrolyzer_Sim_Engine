@@ -9,15 +9,16 @@ import argparse
 # ==========================================================
 def get_project_root() -> Path:
     """
-    Resolve the project root directory based on this file location.
-
-    Expected location:
-        src/python/case_generation/<this_file>.py
-
-    Returns:
-        Path to repository root.
+    Resolve project root using an explicit '.project-root' marker file.
     """
-    return Path(__file__).resolve().parents[3]
+
+    for parent in Path(__file__).resolve().parents:
+        if (parent / ".project-root").exists():
+            return parent
+
+    raise RuntimeError(
+        "Project root not found. Missing '.project-root' marker."
+    )
 
 
 # ==========================================================
