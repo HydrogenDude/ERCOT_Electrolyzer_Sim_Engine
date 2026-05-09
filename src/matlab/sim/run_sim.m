@@ -29,6 +29,8 @@ stack = electrolyzer_system.stack;
 %   MAIN SIMULATION LOOP
 %  ======================================================
 
+use_discrete_dispatch = false;
+
 n_cases = height(cases);
 n_steps = inputs.n_steps;
 
@@ -65,7 +67,8 @@ for ii = 1:n_cases
         % ----------------------------------------------
         % Supervisory update → stack power command
         % ----------------------------------------------
-        state = update_electrolyzer_system_state(state, current_case, stack, signals, jj)
+        state = update_electrolyzer_system_state( ...
+            state, current_case, stack, signals, jj, use_discrete_dispatch)
 
         % ----------------------------------------------
         % Physics evaluation (authoritative)
@@ -105,3 +108,24 @@ end
 %   POST-PROCESSING
 %  ======================================================
 
+
+%% ======================================================
+%   VISUALIZATION
+%  ======================================================
+
+figure;
+
+h = stackedplot( ...
+    inputs.time, ...
+    [ ...
+        results.sim.P_grid_kW(:), ...
+        signals.clean_ratio(:), ...
+        signals.price(:) ...
+    ] ...
+);
+
+h.DisplayLabels = { ...
+    'Grid Power (kW)', ...
+    'Clean Energy Ratio', ...
+    'Price ($/MWh)' ...
+};

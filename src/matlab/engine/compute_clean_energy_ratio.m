@@ -36,8 +36,8 @@ renewable_types = {
     'wind'
     'solar'
     'hydro'
-%    'biomass'
-%    'wsl'
+    'biomass'
+    'wsl'
 };
 
 clean_types = {
@@ -48,7 +48,7 @@ nonrenewable_types = {
     'gas_cc'
     'gas_other'
     'coal'
-    'bess'
+%    'bess'
 };
 
 

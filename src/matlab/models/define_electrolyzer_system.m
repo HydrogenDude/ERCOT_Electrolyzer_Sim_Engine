@@ -30,7 +30,12 @@ N = numel(P);
 % Physical guardrails (no policy)
 % -------------------------------------------------------------------------
 P = max(P, 0);
-P = min(max(P, stack.P_min_kW), stack.P_max_kW);
+P = min(P, stack.P_max_kW);
+
+% -------------------------------------------------------------------------
+% OFF mask (AUTHORITATIVE)
+% -------------------------------------------------------------------------
+is_on = P > 0;
 
 % -------------------------------------------------------------------------
 % Preallocate outputs (struct-of-arrays)
@@ -40,40 +45,52 @@ physics.mH2_gross_kgph    = zeros(N,1);
 physics.mH2_net_kgph      = zeros(N,1);
 physics.mH2_loss_kgph     = zeros(N,1);
 physics.P_grid_smps_kW    = zeros(N,1);
-physics.P_aux_kW          = aux.P_total_kW() * ones(N,1);
+physics.P_aux_kW          = zeros(N,1);
 physics.P_grid_total_kW   = zeros(N,1);
 physics.eta_system_LHV    = zeros(N,1);
 
 % -------------------------------------------------------------------------
-% Stack electrochemistry
+% Stack electrochemistry (ONLY WHEN ON)
 % -------------------------------------------------------------------------
-physics.mH2_gross_kgph = stack.mH2_gross_kgph(P);
+physics.mH2_gross_kgph(is_on) = ...
+    stack.mH2_gross_kgph(P(is_on));
 
 % -------------------------------------------------------------------------
-% PSA purification
+% PSA purification (ONLY WHEN ON)
 % -------------------------------------------------------------------------
-physics.mH2_net_kgph  = psa.mH2_net_kgph(physics.mH2_gross_kgph);
-physics.mH2_loss_kgph = psa.mH2_loss_actual_kgph(physics.mH2_gross_kgph);
+physics.mH2_net_kgph(is_on)  = ...
+    psa.mH2_net_kgph(physics.mH2_gross_kgph(is_on));
+
+physics.mH2_loss_kgph(is_on) = ...
+    psa.mH2_loss_actual_kgph(physics.mH2_gross_kgph(is_on));
 
 % -------------------------------------------------------------------------
-% SMPS AC→DC electrical behavior
+% SMPS AC→DC electrical behavior (ONLY WHEN ON)
 % -------------------------------------------------------------------------
-physics.P_grid_smps_kW = smps.P_grid_kW(P);
-P_smps_loss         = physics.P_grid_smps_kW - P;
+physics.P_grid_smps_kW(is_on) = ...
+    smps.P_grid_kW(P(is_on));
+
+P_smps_loss = physics.P_grid_smps_kW - P;
 
 % -------------------------------------------------------------------------
-% Total grid-side power
+% Auxiliary loads (ONLY WHEN ON)
 % -------------------------------------------------------------------------
-physics.P_grid_total_kW = ...
-      physics.P_grid_smps_kW ...
-    + physics.P_aux_kW ...
-    + psa.P_parasitic_kW(physics.mH2_gross_kgph);
+physics.P_aux_kW(is_on) = aux.P_total_kW();
+
+% -------------------------------------------------------------------------
+% Total grid-side power (ONLY WHEN ON)
+% -------------------------------------------------------------------------
+physics.P_grid_total_kW(is_on) = ...
+      physics.P_grid_smps_kW(is_on) ...
+    + physics.P_aux_kW(is_on) ...
+    + psa.P_parasitic_kW(physics.mH2_gross_kgph(is_on));
 
 % -------------------------------------------------------------------------
 % Chemical power (LHV)
 % -------------------------------------------------------------------------
-P_H2_net_LHV_kW = ...
-    physics.mH2_net_kgph .* stack.LHV_H2_MJ_per_kg / 3.6;
+P_H2_net_LHV_kW = zeros(N,1);
+P_H2_net_LHV_kW(is_on) = ...
+    physics.mH2_net_kgph(is_on) .* stack.LHV_H2_MJ_per_kg / 3.6;
 
 % -------------------------------------------------------------------------
 % System efficiency (authoritative)
@@ -96,6 +113,16 @@ physics.psa.mH2_loss_kgph    = physics.mH2_loss_kgph;
 
 physics.system.P_grid_kW     = physics.P_grid_total_kW;
 physics.system.eta_LHV       = physics.eta_system_LHV;
+
+% -------------------------------------------------------------------------
+% HARD PHYSICAL ASSERT
+% -------------------------------------------------------------------------
+idx = physics.P_stack_kW == 0;
+
+assert( ...
+    all(physics.P_grid_total_kW(idx) == 0), ...
+    'Physics violation: non-zero system power when stack is OFF' ...
+);
 
 end
 
