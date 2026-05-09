@@ -170,7 +170,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate electrolyzer supervisory control DOE cases."
     )
-    parser.add_argument("--N", type=int, default=0)
+    parser.add_argument("--N", type=int, default=20)
     parser.add_argument("--seed", type=int, default=2)
     parser.add_argument(
         "--filename",

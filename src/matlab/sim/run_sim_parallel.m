@@ -3,6 +3,14 @@
 %  ======================================================
 clc; clear;
 tic
+
+% -----------------------------
+% Start parallel pool (once)
+% -----------------------------
+if isempty(gcp('nocreate'))
+    parpool;   % default number of workers
+end
+
 % -----------------------------
 % Load inputs and cases
 % -----------------------------
@@ -27,104 +35,112 @@ stack = electrolyzer_system.stack;
 %% ======================================================
 %   SIMULATION TIME WINDOW SELECTION
 %  ======================================================
-% Choose how much of the timeline to simulate
 
 run_mode = "year";        % "all" | "year"
-years_to_simulate = 2025; % scalar or vector, e.g. 2024:2026
+years_to_simulate = 2025;
 
 switch run_mode
     case "all"
         sim_idx = true(size(inputs.time));
-
     case "year"
         sim_idx = ismember(year(inputs.time), years_to_simulate);
-
     otherwise
         error("Unknown run_mode");
 end
 
-sim_steps = find(sim_idx);           % global timestep indices
-n_steps_sim = numel(sim_steps);      % number of simulated steps
+sim_steps   = find(sim_idx);
+n_steps_sim = numel(sim_steps);
 
 fprintf("Simulating %d timesteps (%s mode)\n", ...
     n_steps_sim, run_mode);
 
 %% ======================================================
-%   MAIN SIMULATION LOOP
+%   PREPARE READ-ONLY DATA FOR PARALLEL USE
 %  ======================================================
+% Prevents large struct duplication on every worker
+
+inputsC   = parallel.pool.Constant(inputs);
+signalsC  = parallel.pool.Constant(signals);
+kernelC   = parallel.pool.Constant(emissions_kernel);
+systemC   = parallel.pool.Constant(electrolyzer_system);
 
 use_discrete_dispatch = false;
 
-n_cases = height(cases);
-results(n_cases) = struct();   % preallocate
+%% ======================================================
+%   MAIN SIMULATION LOOP (PARALLELIZED)
+%  ======================================================
 
-for ii = 1:n_cases
+n_cases = height(cases);
+results(n_cases) = struct();   % sliced output (REQUIRED)
+
+parfor ii = 1:n_cases
 
     % --------------------------------------------------
-    % Select current case (row → scalar struct)
+    % Pull read-only data locally (worker scope)
+    % --------------------------------------------------
+    inputs            = inputsC.Value;
+    signals           = signalsC.Value;
+    emissions_kernel  = kernelC.Value;
+    electrolyzer_sys  = systemC.Value;
+    stack             = electrolyzer_sys.stack;
+
+    % --------------------------------------------------
+    % Select current case
     % --------------------------------------------------
     current_case = table2struct(cases(ii,:), 'ToScalar', true);
 
-    fprintf('Running case %d / %d (ID = %d)\n', ...
-        ii, n_cases, current_case.ID);
-
     % --------------------------------------------------
-    % Reset supervisory state
+    % Reset supervisory state (LOCAL)
     % --------------------------------------------------
     state = initialize_electrolyzer_system_state();
 
     % --------------------------------------------------
-    % Preallocate time-series outputs (LOCAL indexing)
+    % Local results struct (CRITICAL for parfor)
     % --------------------------------------------------
-    sim_results.time        = inputs.time(sim_steps);
-    sim_results.P_stack_kW  = zeros(n_steps_sim,1);
-    sim_results.P_grid_kW   = zeros(n_steps_sim,1);
-    sim_results.h2_kgph     = zeros(n_steps_sim,1);
-    sim_results.eta_LHV     = zeros(n_steps_sim,1);
+    local_sim = struct();
+    local_sim.time        = inputs.time(sim_steps);
+    local_sim.P_stack_kW  = zeros(n_steps_sim,1);
+    local_sim.P_grid_kW   = zeros(n_steps_sim,1);
+    local_sim.h2_kgph     = zeros(n_steps_sim,1);
+    local_sim.eta_LHV     = zeros(n_steps_sim,1);
 
     % --------------------------------------------------
-    % TIMESTEP LOOP
+    % TIMESTEP LOOP (SERIAL — CORRECT)
     % --------------------------------------------------
     for jj = 1:n_steps_sim
 
-        t = sim_steps(jj);  % global timestep index
+        t = sim_steps(jj);
 
-        % ----------------------------------------------
-        % Supervisory update → stack power command
-        % ----------------------------------------------
         state = update_electrolyzer_system_state( ...
             state, current_case, stack, signals, t, use_discrete_dispatch);
 
-        % ----------------------------------------------
-        % Physics evaluation (authoritative)
-        % ----------------------------------------------
-        physics = electrolyzer_system.physics(state.P_stack_cmd_kW);
+        physics = electrolyzer_sys.physics(state.P_stack_cmd_kW);
 
-        % ----------------------------------------------
-        % Store timestep outputs (local timeline)
-        % ----------------------------------------------
-        sim_results.P_stack_kW(jj) = physics.P_stack_kW;
-        sim_results.P_grid_kW(jj)  = physics.system.P_grid_kW;
-        sim_results.h2_kgph(jj)    = physics.psa.mH2_net_kgph;
-        sim_results.eta_LHV(jj)    = physics.system.eta_LHV;
+        local_sim.P_stack_kW(jj) = physics.P_stack_kW;
+        local_sim.P_grid_kW(jj)  = physics.system.P_grid_kW;
+        local_sim.h2_kgph(jj)    = physics.psa.mH2_net_kgph;
+        local_sim.eta_LHV(jj)    = physics.system.eta_LHV;
     end
 
     % --------------------------------------------------
-    % Emissions attribution (post-run, local timeline)
+    % Emissions attribution
     % --------------------------------------------------
     emissions_i = electrolyzer_emissions_from_kernel( ...
-        inputs, emissions_kernel, sim_results, sim_steps);
+        inputs, emissions_kernel, local_sim, sim_steps);
 
     % --------------------------------------------------
-    % Store case-level results
+    % Store sliced results (ONLY ONCE)
     % --------------------------------------------------
     results(ii).ID        = current_case.ID;
     results(ii).case      = current_case;
-    results(ii).sim       = sim_results;
+    results(ii).sim       = local_sim;
     results(ii).emissions = emissions_i;
-    results(ii).state     = state;   % final state snapshot
+    results(ii).state     = state;
+
 end
+
 toc
+
 %% ======================================================
 %   VISUALIZATION (example: first case)
 %  ======================================================
