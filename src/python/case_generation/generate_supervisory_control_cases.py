@@ -21,17 +21,12 @@ def get_project_root() -> Path:
 
 
 # ==========================================================
-# Default supervisory control case
+# Default supervisory control case (ALWAYS ID = 1)
 # ==========================================================
 def default_supervisory_control_case() -> pd.DataFrame:
     """
-    Deterministic default supervisory control case.
-
-    Used when N == 0 to allow single-case simulations without DOE.
-    Values are chosen to be:
-      - physically reasonable
-      - non-extreme
-      - strictly monotonic and constraint-safe
+    Deterministic baseline supervisory control case.
+    This case is ALWAYS ID = 1 and is NEVER generated stochastically.
     """
 
     row = {
@@ -55,34 +50,42 @@ def default_supervisory_control_case() -> pd.DataFrame:
 # ==========================================================
 # DOE generator (controls only)
 # ==========================================================
-def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
+def generate_supervisory_control_cases(
+    N: int,
+    seed: int = 1,
+) -> pd.DataFrame:
     """
-    Space-filling, constraint-correct DOE for electrolyzer
-    supervisory control.
+    Space-filling, constraint-correct DOE for electrolyzer supervisory control.
+
+    Semantics:
+      - ID = 1 is ALWAYS the deterministic default case.
+      - N is the TOTAL number of cases returned.
+      - If N = 1 → default case only.
+      - If N > 1 → default + (N-1) stochastic cases.
 
     Guarantees (row-wise, by construction):
       clean_ratio_stop < clean_ratio_turndown < clean_ratio_start
       price_start < price_turndown < price_stop
-
-    Special behavior:
-      - If N == 0, returns a single deterministic default case.
     """
 
-    # ------------------------------
-    # Default-case override
-    # ------------------------------
-    if N == 0:
-        return default_supervisory_control_case()
+    if N < 1:
+        raise ValueError("N must be >= 1")
 
     rng = np.random.default_rng(seed)
     bounds = control_parameter_bounds()
 
-    CLEAN_RATIO_GAP = 1e-3
-    PRICE_GAP = 1e-2
+    CLEAN_RATIO_GAP = 0.05 #1e-3
+    PRICE_GAP = 5.0 #1e-2
 
-    rows = []
+    # ------------------------------------------------------
+    # Always start with default case
+    # ------------------------------------------------------
+    rows = [default_supervisory_control_case().iloc[0].to_dict()]
 
-    for i in range(1, N + 1):
+    # ------------------------------------------------------
+    # Generate N-1 stochastic cases
+    # ------------------------------------------------------
+    for case_id in range(2, N + 1):
 
         min_up_steps = rng.integers(0, bounds["min_up_steps_max"] + 1)
         min_down_steps = rng.integers(0, bounds["min_down_steps_max"] + 1)
@@ -113,7 +116,7 @@ def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
 
         rows.append(
             {
-                "ID": i,
+                "ID": case_id,
                 "min_up_steps": min_up_steps,
                 "min_down_steps": min_down_steps,
                 "price_start": price_start,
@@ -132,16 +135,19 @@ def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
 
     # ------------------------------------------------------
     # Decorrelate discrete parameters (DOE hygiene)
+    # (applies only to stochastic cases, not default)
     # ------------------------------------------------------
-    perm = rng.permutation(N)
-    cols = [
-        "min_up_steps",
-        "min_down_steps",
-        "turndown_delay",
-        "recover_delay",
-        "price_delay",
-    ]
-    T[cols] = T.loc[perm, cols].values
+    if N > 1:
+        discrete_cols = [
+            "min_up_steps",
+            "min_down_steps",
+            "turndown_delay",
+            "recover_delay",
+            "price_delay",
+        ]
+
+        perm = rng.permutation(len(T) - 1) + 1  # skip ID=1
+        T.loc[1:, discrete_cols] = T.loc[perm, discrete_cols].values
 
     return T
 
@@ -152,10 +158,10 @@ def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
 def control_parameter_bounds():
     return {
         "min_up_steps_max": 8,
-        "min_down_steps_max": 6,
-        "turndown_delay_max": 4,
-        "recover_delay_max": 4,
-        "price_delay_max": 4,
+        "min_down_steps_max": 8,
+        "turndown_delay_max": 8,
+        "recover_delay_max": 8,
+        "price_delay_max": 8,
         "clean_ratio_start": (0.5, 0.8),
         "clean_ratio_stop": 0.20,
         "price_start": (15, 80),
@@ -163,15 +169,16 @@ def control_parameter_bounds():
     }
 
 
+
 # ==========================================================
 # CLI entry point
 # ==========================================================
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate electrolyzer supervisory control DOE cases."
+        description="Generate electrolyzer supervisory control cases."
     )
-    parser.add_argument("--N", type=int, default=20)
-    parser.add_argument("--seed", type=int, default=2)
+    parser.add_argument("--N", type=int, default=10)
+    parser.add_argument("--seed", type=int, default=69)
     parser.add_argument(
         "--filename",
         type=str,
@@ -187,13 +194,15 @@ def main():
 
     outfile = output_dir / args.filename
 
-    T = generate_supervisory_control_cases(args.N, args.seed)
+    T = generate_supervisory_control_cases(
+        args.N,
+        seed=args.seed,
+    )
+
     T.to_csv(outfile, index=False)
 
-    if args.N == 0:
-        print("[INFO] N = 0 → using single default supervisory control case")
-
-    print(f"[OK] Generated {len(T)} control case(s)")
+    print("[INFO] Default case is always ID = 1")
+    print(f"[OK] Generated {len(T)} total control case(s)")
     print(f"[OK] Written to: {outfile}")
 
 
