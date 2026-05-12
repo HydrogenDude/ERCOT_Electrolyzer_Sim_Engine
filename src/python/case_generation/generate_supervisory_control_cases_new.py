@@ -3,32 +3,25 @@ import pandas as pd
 from pathlib import Path
 import argparse
 
+# ==========================================================
+# Similarity thresholds (EDIT THESE)
+# ==========================================================
+PRICE_TOL = 5.0        # $/MWh
+CR_TOL = 0.05         # clean ratio (unitless)
 
 # ==========================================================
 # Project path resolution
 # ==========================================================
 def get_project_root() -> Path:
-    """
-    Resolve project root using an explicit '.project-root' marker file.
-    """
     for parent in Path(__file__).resolve().parents:
         if (parent / ".project-root").exists():
             return parent
-
-    raise RuntimeError(
-        "Project root not found. Missing '.project-root' marker."
-    )
-
+    raise RuntimeError("Project root not found.")
 
 # ==========================================================
 # Default supervisory control case (ALWAYS ID = 1)
 # ==========================================================
 def default_supervisory_control_case() -> pd.DataFrame:
-    """
-    Deterministic baseline supervisory control case.
-    This case is ALWAYS ID = 1 and is NEVER generated stochastically.
-    """
-
     row = {
         "ID": 1,
         "min_up_steps": 4,
@@ -43,50 +36,24 @@ def default_supervisory_control_case() -> pd.DataFrame:
         "recover_delay": 4,
         "price_delay": 2,
     }
-
     return pd.DataFrame([row])
 
-
 # ==========================================================
-# DOE generator (controls only)
+# Generate supervisory control cases
 # ==========================================================
-def generate_supervisory_control_cases(
-    N: int,
-    seed: int = 1,
-) -> pd.DataFrame:
-    """
-    Space-filling, constraint-correct DOE for electrolyzer supervisory control.
-
-    Semantics:
-      - ID = 1 is ALWAYS the deterministic default case.
-      - N is the TOTAL number of cases returned.
-      - If N = 1 → default case only.
-      - If N > 1 → default + (N-1) stochastic cases.
-
-    Guarantees (row-wise, by construction):
-      clean_ratio_stop < clean_ratio_turndown < clean_ratio_start
-      price_start < price_turndown < price_stop
-    """
-
+def generate_supervisory_control_cases(N: int, seed: int = 1) -> pd.DataFrame:
     if N < 1:
         raise ValueError("N must be >= 1")
 
     rng = np.random.default_rng(seed)
     bounds = control_parameter_bounds()
 
-    CLEAN_RATIO_GAP = 0.05 #1e-3
-    PRICE_GAP = 5.0 #1e-2
+    CLEAN_RATIO_GAP = 0.05
+    PRICE_GAP = 5.0
 
-    # ------------------------------------------------------
-    # Always start with default case
-    # ------------------------------------------------------
     rows = [default_supervisory_control_case().iloc[0].to_dict()]
 
-    # ------------------------------------------------------
-    # Generate N-1 stochastic cases
-    # ------------------------------------------------------
     for case_id in range(2, N + 1):
-
         min_up_steps = rng.integers(0, bounds["min_up_steps_max"] + 1)
         min_down_steps = rng.integers(0, bounds["min_down_steps_max"] + 1)
 
@@ -114,43 +81,59 @@ def generate_supervisory_control_cases(
             price_stop - PRICE_GAP,
         )
 
-        rows.append(
-            {
-                "ID": case_id,
-                "min_up_steps": min_up_steps,
-                "min_down_steps": min_down_steps,
-                "price_start": price_start,
-                "price_turndown": price_turndown,
-                "price_stop": price_stop,
-                "clean_ratio_start": clean_ratio_start,
-                "clean_ratio_turndown": clean_ratio_turndown,
-                "clean_ratio_stop": clean_ratio_stop,
-                "turndown_delay": turndown_delay,
-                "recover_delay": recover_delay,
-                "price_delay": price_delay,
-            }
-        )
+        rows.append({
+            "ID": case_id,
+            "min_up_steps": min_up_steps,
+            "min_down_steps": min_down_steps,
+            "price_start": price_start,
+            "price_turndown": price_turndown,
+            "price_stop": price_stop,
+            "clean_ratio_start": clean_ratio_start,
+            "clean_ratio_turndown": clean_ratio_turndown,
+            "clean_ratio_stop": clean_ratio_stop,
+            "turndown_delay": turndown_delay,
+            "recover_delay": recover_delay,
+            "price_delay": price_delay,
+        })
 
-    T = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
 
-    # ------------------------------------------------------
-    # Decorrelate discrete parameters (DOE hygiene)
-    # (applies only to stochastic cases, not default)
-    # ------------------------------------------------------
-    if N > 1:
-        discrete_cols = [
-            "min_up_steps",
-            "min_down_steps",
-            "turndown_delay",
-            "recover_delay",
-            "price_delay",
-        ]
+# ==========================================================
+# Similarity filtering
+# ==========================================================
+def prune_similar_cases(T: pd.DataFrame) -> pd.DataFrame:
+    keep = []
+    removed = 0
 
-        perm = rng.permutation(len(T) - 1) + 1  # skip ID=1
-        T.loc[1:, discrete_cols] = T.loc[perm, discrete_cols].values
+    for _, row in T.iterrows():
+        if row["ID"] == 1:
+            keep.append(row)
+            continue
 
-    return T
+        is_duplicate = False
+        for k in keep:
+            if (
+                abs(row["price_start"] - k["price_start"]) < PRICE_TOL and
+                abs(row["price_turndown"] - k["price_turndown"]) < PRICE_TOL and
+                abs(row["price_stop"] - k["price_stop"]) < PRICE_TOL and
+                abs(row["clean_ratio_start"] - k["clean_ratio_start"]) < CR_TOL and
+                abs(row["clean_ratio_turndown"] - k["clean_ratio_turndown"]) < CR_TOL and
+                abs(row["clean_ratio_stop"] - k["clean_ratio_stop"]) < CR_TOL
+            ):
+                is_duplicate = True
+                removed += 1
+                break
 
+        if not is_duplicate:
+            keep.append(row)
+
+    T_filt = pd.DataFrame(keep).reset_index(drop=True)
+    T_filt["ID"] = np.arange(1, len(T_filt) + 1)
+
+    print(f"[INFO] Similarity pruning removed {removed} cases")
+    print(f"[INFO] Final DOE size: {len(T_filt)}")
+
+    return T_filt
 
 # ==========================================================
 # Parameter bounds
@@ -168,43 +151,27 @@ def control_parameter_bounds():
         "price_stop": 100,
     }
 
-
-
 # ==========================================================
 # CLI entry point
 # ==========================================================
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate electrolyzer supervisory control cases."
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument("--N", type=int, default=10000)
-    parser.add_argument("--seed", type=int, default=69)
-    parser.add_argument(
-        "--filename",
-        type=str,
-        default="supervisory_control_cases.csv",
-        help="Output CSV filename (written to configs/paper_cases/)",
-    )
-
+    parser.add_argument("--seed", type=int, default=26)
+    parser.add_argument("--filename", type=str, default="supervisory_control_cases.csv")
     args = parser.parse_args()
 
     project_root = get_project_root()
     output_dir = project_root / "configs" / "paper_cases"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    T = generate_supervisory_control_cases(args.N, seed=args.seed)
+    T = prune_similar_cases(T)
+
     outfile = output_dir / args.filename
-
-    T = generate_supervisory_control_cases(
-        args.N,
-        seed=args.seed,
-    )
-
     T.to_csv(outfile, index=False)
 
-    print("[INFO] Default case is always ID = 1")
-    print(f"[OK] Generated {len(T)} total control case(s)")
     print(f"[OK] Written to: {outfile}")
-
 
 if __name__ == "__main__":
     main()

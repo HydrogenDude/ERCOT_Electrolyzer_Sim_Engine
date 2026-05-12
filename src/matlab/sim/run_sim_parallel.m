@@ -10,6 +10,8 @@ if isempty(gcp('nocreate'))
     parpool('local', 4);          % Set workers to 4
 end
 
+% Manually shutdown pool: delete(gcp('nocreate'))
+
 %% ======================================================
 %   LOAD INPUTS & CASES
 % ======================================================
@@ -22,7 +24,7 @@ electrolyzer_system = define_electrolyzer_system();
 %% ======================================================
 %   SIMULATION TIME WINDOW
 % ======================================================
-run_mode = "year";
+run_mode = "all";
 years_to_simulate = 2025;
 
 switch run_mode
