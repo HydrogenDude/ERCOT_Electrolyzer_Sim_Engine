@@ -156,7 +156,7 @@ def control_parameter_bounds():
 # ==========================================================
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--N", type=int, default=10000)
+    parser.add_argument("--N", type=int, default=1)
     parser.add_argument("--seed", type=int, default=26)
     parser.add_argument("--filename", type=str, default="supervisory_control_cases.csv")
     args = parser.parse_args()

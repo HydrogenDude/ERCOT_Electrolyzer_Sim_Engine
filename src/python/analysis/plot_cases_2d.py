@@ -15,8 +15,8 @@ from scipy.spatial import ConvexHull
 # USER CONFIGURATION
 # =====================================================
 P_LOW  = 0
-#P_HIGH = 90.5
-P_HIGH = 88.2
+P_HIGH = 90.5
+#P_HIGH = 88.2
 
 REGION_MODE = True
 REGION_PCT = (0, 88.2)
