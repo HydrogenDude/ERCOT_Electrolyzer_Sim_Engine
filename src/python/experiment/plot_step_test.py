@@ -1,5 +1,23 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from pathlib import Path
+
+# =========================================================
+# PROJECT ROOT DETECTION
+# =========================================================
+def get_project_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / ".project-root").exists():
+            return parent
+    raise RuntimeError("Project root not found.")
+
+PROJECT_ROOT = get_project_root()
+
+# =========================================================
+# OUTPUT PATH
+# =========================================================
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "figures"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =========================================================
 # Matplotlib style (MATCHES hydrogen plots)
@@ -21,7 +39,7 @@ x = np.array([0, 1, 2, 4, 9, 9, 10, 40, 70, 100, 130, 160, 190, 220, 250])
 y = np.array([0, 0, 10, 20, 20, 58, 100, 90, 80, 70, 60, 50, 40, 30, 0])
 
 # =========================================================
-# Figure (same aspect logic as hydrogen plots)
+# Figure
 # =========================================================
 fig, ax = plt.subplots(figsize=(7, 4))
 
@@ -50,20 +68,8 @@ ax.hlines(
     label="Turn‑down limit"
 )
 
-#ax.annotate(
-#    "Turn‑down limit",
-#    xy=(45, 30),
-#    xytext=(0, 6),
-#    textcoords="offset points",
-#    ha="left",
-#    va="bottom",
-#    fontsize=10,
-#    color="red",
-#    fontweight="bold"
-#)
-
 # =========================================================
-# Axes formatting (hydrogen‑style)
+# Axes formatting
 # =========================================================
 ax.set_xlabel("Time (minutes)")
 ax.set_ylabel("Stack Load (%)")
@@ -76,14 +82,14 @@ ax.set_yticks([0, 20, 40, 60, 80, 100])
 
 ax.grid(True, alpha=0.25)
 
-# Light, consistent spines
+# Light spines
 for spine in ax.spines.values():
     spine.set_linewidth(1.0)
 
 ax.tick_params(axis="both", which="major", length=6, width=1)
 
 # =========================================================
-# Legend (consistent placement)
+# Legend
 # =========================================================
 ax.legend(
     loc="lower center",
@@ -95,8 +101,14 @@ ax.legend(
 )
 
 # =========================================================
-# Save / show
+# Save
 # =========================================================
+filename = "step_test_command_profile.pdf"
+output_path = OUTPUT_DIR / filename
+
 fig.tight_layout()
-fig.savefig("step_test_command_profile.pdf", bbox_inches="tight")
+fig.savefig(output_path, format="pdf", bbox_inches="tight")
+
+print(f"✅ Saved figure to: {output_path}")
+
 plt.show()

@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import PchipInterpolator
 from pathlib import Path
+import pandas as pd
 
 # ==================================================
 # PROJECT ROOT DETECTION
@@ -87,7 +88,7 @@ plt.plot(P_V_smooth, V_stack_fit, color='tab:blue', linewidth=3, label='Voltage 
 plt.plot(P_I_smooth, I_stack_fit, color='tab:orange', linewidth=3, label='Current PCHIP fit')
 
 plt.xlabel('Stack Power, $P_{\\mathrm{stack}}$ (kW)')
-plt.ylabel('Stack Voltage (V) / Stack Current (A)')
+plt.ylabel('Stack Voltage (V) / Current (A)')
 plt.xlim(0, 60)
 plt.ylim(0, 400)
 
@@ -169,3 +170,6 @@ plt.tight_layout()
 plt.savefig(output_path, format="pdf", bbox_inches="tight")
 print(f"✅ Saved figure to: {output_path}")
 plt.show()
+
+
+

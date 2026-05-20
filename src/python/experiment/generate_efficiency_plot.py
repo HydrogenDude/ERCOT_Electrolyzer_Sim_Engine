@@ -89,27 +89,28 @@ plt.rcParams.update({
     "lines.markersize": 7,
 })
 
-plt.figure(figsize=(7, 4.5))  # optimized for LaTeX
+plt.figure(figsize=(7, 4))  # optimized for LaTeX
 
 # ---------------- LHV (background) ---------------- #
-plt.plot(x_s, sg_lhv, color="tab:orange", alpha=0.5, label=r"Stack$_{\mathrm{Gross,\,LHV}}$")
-plt.plot(x_s, sn_lhv, color="tab:orange", alpha=0.5, linestyle="--", label=r"Stack$_{\mathrm{Net,\,LHV}}$")
+plt.plot(x_s, sg_lhv, color="tab:orange", alpha=0.5, label=r"Stack$_{\mathrm{G,\,LHV}}$")
+plt.plot(x_s, sn_lhv, color="tab:orange", alpha=0.5, linestyle="--", label=r"Stack$_{\mathrm{N,\,LHV}}$")
 
-plt.plot(x_sys, syg_lhv, color="tab:red", alpha=0.5, label=r"System$_{\mathrm{Gross,\,LHV}}$")
-plt.plot(x_sys, syn_lhv, color="tab:red", alpha=0.5, linestyle="--", label=r"System$_{\mathrm{Net,\,LHV}}$")
+plt.plot(x_sys, syg_lhv, color="tab:red", alpha=0.5, label=r"System$_{\mathrm{G,\,LHV}}$")
+plt.plot(x_sys, syn_lhv, color="tab:red", alpha=0.5, linestyle="--", label=r"System$_{\mathrm{N,\,LHV}}$")
 
 # ---------------- HHV (foreground) ---------------- #
 plt.scatter(stack_power_kW, stack_g_hhv, color="tab:blue")
-plt.plot(x_s, sg_hhv, color="tab:blue", label=r"Stack$_{\mathrm{Gross,\,HHV}}$")
+plt.plot(x_s, sg_hhv, color="tab:blue", label=r"Stack$_{\mathrm{G,\,HHV}}$")
 
 plt.scatter(stack_power_kW, stack_n_hhv, color="tab:blue")
-plt.plot(x_s, sn_hhv, color="tab:blue", linestyle="--", label=r"Stack$_{\mathrm{Net,\,HHV}}$")
+plt.plot(x_s, sn_hhv, color="tab:blue", linestyle="--", label=r"Stack$_{\mathrm{N,\,HHV}}$")
 
 plt.scatter(system_power_kW, system_g_hhv, color="tab:green")
-plt.plot(x_sys, syg_hhv, color="tab:green", label=r"System$_{\mathrm{Gross,\,HHV}}$")
+plt.plot(x_sys, syg_hhv, color="tab:green", label=r"System$_{\mathrm{G,\,HHV}}$")
 
 plt.scatter(system_power_kW, system_n_hhv, color="tab:green")
-plt.plot(x_sys, syn_hhv, color="tab:green", linestyle="--", label=r"System$_{\mathrm{Net,\,HHV}}$")
+plt.plot(x_sys, syn_hhv, color="tab:green", linestyle="--", label=r"System$_{\mathrm{N,\,HHV}}$")
+
 
 # ---------------- Formatting ---------------- #
 plt.ylim(0, 100)
@@ -119,11 +120,11 @@ plt.grid(True, alpha=0.3)
 
 plt.legend(
     loc="upper right",
-    ncol=2,
+    ncol=4,
     frameon=True,
     handlelength=1.6,
     columnspacing=0.8,   # ↓ horizontal spacing between columns
-    labelspacing=0.1,    # ↓ vertical spacing between rows
+    labelspacing=0.05,    # ↓ vertical spacing between rows
     handletextpad=0.4,   # ↓ space between line and text
     borderpad=0.4       # ↓ padding inside legend box
 )

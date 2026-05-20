@@ -12,20 +12,57 @@ from tkinter import filedialog
 from scipy.spatial import ConvexHull
 
 # =====================================================
+# VISUAL STYLE CONTROL (EDIT THIS ONLY)
+# =====================================================
+STYLE = {
+    # Font sizes
+    "label_fs": 14,
+    "tick_fs": 12,
+    "legend_fs": 11,
+
+    # Marker sizes
+    "id1_size": 90,
+    "scatter_size": 2,
+
+    # Line widths
+    "id1_edge_width": 1.2,
+    "spine_width": 1.0,
+
+    # Transparency
+    "scatter_alpha": 0.5,
+
+    # Tick appearance
+    "tick_length": 3,
+
+    # Figure
+    "figsize": (7, 4),
+    "dpi": 300,
+}
+
+# Apply global styling
+plt.rcParams.update({
+    "font.size": STYLE["label_fs"],
+    "axes.labelsize": STYLE["label_fs"],
+    "xtick.labelsize": STYLE["tick_fs"],
+    "ytick.labelsize": STYLE["tick_fs"],
+    "legend.fontsize": STYLE["legend_fs"],
+    "axes.linewidth": STYLE["spine_width"],
+})
+
+# =====================================================
 # USER CONFIGURATION
 # =====================================================
 P_LOW  = 0
-P_HIGH = 90.5
-#P_HIGH = 88.2
+P_HIGH = 88.2
 
-REGION_MODE = True
+REGION_MODE = False
 REGION_PCT = (0, 88.2)
 REGION_ALPHA = 0.1
 
 PLOT_CONFIGS = [
-    {"x": "h2",   "y": "co2",  "title": "H₂ vs CO₂"},
-    {"x": "cost", "y": "h2",   "title": "Cost vs H₂"},
-    {"x": "cost", "y": "co2",  "title": "Cost vs CO₂"},
+    {"x": "h2",   "y": "co2"},
+    {"x": "cost", "y": "h2"},
+    {"x": "cost", "y": "co2"},
 ]
 
 AXIS_LABELS = {
@@ -41,8 +78,20 @@ GROUP_FILTER = {
     "S": {20, 69, 26},
 }
 
-# Unique marker per dataset (ID1 only)
 ID1_MARKERS = ["X", "D", "P", "^", "v", "s", "*", "<", ">", "h"]
+
+# =====================================================
+# PROJECT ROOT
+# =====================================================
+def find_project_root(start_path: Path):
+    for parent in [start_path.resolve()] + list(start_path.resolve().parents):
+        if (parent / ".project-root").exists():
+            return parent
+    raise RuntimeError("Could not find .project-root")
+
+PROJECT_ROOT = find_project_root(Path(__file__))
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "figures"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =====================================================
 # FILE SELECTION
@@ -52,7 +101,7 @@ def select_h5_files():
     root.withdraw()
     root.attributes("-topmost", True)
     files = filedialog.askopenfilenames(
-        title="Select HDF5 result files",
+        title="Select HDF5 files",
         filetypes=[("HDF5 files", "*.h5")]
     )
     root.destroy()
@@ -63,7 +112,7 @@ if not h5_files:
     raise RuntimeError("No files selected.")
 
 # =====================================================
-# FILENAME PARSING
+# PARSING
 # =====================================================
 pattern = re.compile(
     r"N(?P<N>\d+)_S(?P<S>\d+)_D(?P<D>on|off)_(?P<year>\d{4})",
@@ -77,7 +126,7 @@ def dataset_selected(data, filt):
     return True
 
 # =====================================================
-# LOAD DATASETS
+# LOAD DATA
 # =====================================================
 used_axes = {cfg["x"] for cfg in PLOT_CONFIGS} | {cfg["y"] for cfg in PLOT_CONFIGS}
 
@@ -116,7 +165,7 @@ if not datasets:
     raise RuntimeError("No datasets passed filters.")
 
 # =====================================================
-# COLOR NORMALIZATION (POINTS)
+# COLORS
 # =====================================================
 norm = Normalize(
     vmin=np.percentile(np.concatenate(all_startups), 0),
@@ -124,134 +173,91 @@ norm = Normalize(
 )
 cmap = cm.jet
 
-# =====================================================
-# DATASET COLORS (REGIONS)
-# =====================================================
-dataset_cmap = plt.get_cmap("tab10")
 dataset_colors = {
-    i: dataset_cmap(i % dataset_cmap.N)
+    i: plt.get_cmap("tab10")(i % 10)
     for i in range(len(datasets))
 }
 
-# =====================================================
-# AXIS LIMITS
-# =====================================================
 axis_limits = {
     k: np.percentile(np.concatenate(v), [P_LOW, P_HIGH])
     for k, v in all_vals.items()
 }
 
 # =====================================================
-# 2D PLOT FUNCTION
+# PLOT FUNCTION
 # =====================================================
 def plot_2d(ax, x_key, y_key):
     x_lo, x_hi = axis_limits[x_key]
     y_lo, y_hi = axis_limits[y_key]
 
     for i, data in enumerate(datasets):
-        x = data[x_key]
-        y = data[y_key]
-        startups = data["startups"]
-
+        x, y, startups = data[x_key], data[y_key], data["startups"]
         marker = ID1_MARKERS[i % len(ID1_MARKERS)]
 
-        # ---- ID 1 ----
+        # ID1 point
         ax.scatter(
             x[0], y[0],
             c=[startups[0]],
             cmap=cmap,
             norm=norm,
             marker=marker,
-            s=140,
+            s=STYLE["id1_size"],
             edgecolors="black",
-            linewidths=2,
+            linewidths=STYLE["id1_edge_width"],
             zorder=100,
         )
 
-        if REGION_MODE:
-            x_p = np.percentile(x, REGION_PCT)
-            y_p = np.percentile(y, REGION_PCT)
+        # Cloud
+        inlier = (
+            (x >= x_lo) & (x <= x_hi) &
+            (y >= y_lo) & (y <= y_hi)
+        )
 
-            mask = (
-                (x >= x_p[0]) & (x <= x_p[1]) &
-                (y >= y_p[0]) & (y <= y_p[1])
-            )
-
-            pts = np.column_stack([x[mask], y[mask]])
-            if pts.shape[0] >= 3:
-                hull = ConvexHull(pts)
-                poly = Polygon(
-                    pts[hull.vertices],
-                    closed=True,
-                    facecolor=dataset_colors[i],
-                    edgecolor="none",
-                    alpha=REGION_ALPHA,
-                    zorder=1,
-                )
-                ax.add_patch(poly)
-
-        else:
-            inlier = (
-                (x >= x_lo) & (x <= x_hi) &
-                (y >= y_lo) & (y <= y_hi)
-            )
-            ax.scatter(
-                x[inlier],
-                y[inlier],
-                c=startups[inlier],
-                cmap=cmap,
-                norm=norm,
-                s=2,
-                alpha=0.5,
-                linewidth=0,
-            )
+        ax.scatter(
+            x[inlier],
+            y[inlier],
+            c=startups[inlier],
+            cmap=cmap,
+            norm=norm,
+            s=STYLE["scatter_size"],
+            alpha=STYLE["scatter_alpha"],
+            linewidth=0,
+        )
 
     ax.set_xlabel(AXIS_LABELS[x_key])
     ax.set_ylabel(AXIS_LABELS[y_key])
     ax.set_xlim(x_lo, x_hi)
     ax.set_ylim(y_lo, y_hi)
+
+    ax.tick_params(
+        length=STYLE["tick_length"],
+        width=STYLE["spine_width"],
+    )
+
     ax.grid(False)
 
 # =====================================================
-# FIGURE
+# GENERATE + SAVE FIGURES
 # =====================================================
-fig, axes = plt.subplots(
-    1, len(PLOT_CONFIGS),
-    figsize=(5 * len(PLOT_CONFIGS), 4),
-    dpi=110,
-    squeeze=False,
-)
+for idx, cfg in enumerate(PLOT_CONFIGS):
 
-for ax, cfg in zip(axes[0], PLOT_CONFIGS):
-    plot_2d(ax, cfg["x"], cfg["y"])
-    ax.set_title(cfg.get("title", f"{cfg['x']} vs {cfg['y']}"))
-
-# =====================================================
-# LEGEND (ID1 ONLY — REGION MODE)
-# =====================================================
-if REGION_MODE:
-    legend_handles = []
-    for i, data in enumerate(datasets):
-        marker = ID1_MARKERS[i % len(ID1_MARKERS)]
-        handle = Line2D(
-            [0], [0],
-            marker=marker,
-            linestyle="None",
-            markerfacecolor="white",
-            markeredgecolor="black",
-            markeredgewidth=2,
-            markersize=10,
-            label=data["label"],
-        )
-        legend_handles.append(handle)
-
-    fig.legend(
-        handles=legend_handles,
-        loc="upper center",
-        ncol=min(len(legend_handles), 4),
-        frameon=True,
-        title="ID 1 Case (by dataset)",
+    fig, ax = plt.subplots(
+        figsize=STYLE["figsize"],
+        dpi=STYLE["dpi"]
     )
 
-plt.tight_layout(rect=[0, 0, 1, 0.92])
-plt.show()
+    plot_2d(ax, cfg["x"], cfg["y"])
+
+    # Remove redundant x labels for stacking
+    if idx < len(PLOT_CONFIGS) - 1:
+        ax.set_xlabel("")
+
+    plt.tight_layout(pad=0.5)
+
+    fname = f"{cfg['x']}_vs_{cfg['y']}.pdf"
+    save_path = OUTPUT_DIR / fname
+
+    fig.savefig(save_path)
+    plt.close(fig)
+
+    print(f"Saved: {save_path}")

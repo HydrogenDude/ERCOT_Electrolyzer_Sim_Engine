@@ -131,7 +131,7 @@ def plot_data(df, primary_cols, primary_alphas, secondary_cols, secondary_alphas
 
     df = select_time_range(df)
 
-    fig, ax1 = plt.subplots(figsize=(7, 5))
+    fig, ax1 = plt.subplots(figsize=(12, 4))
     colors = plt.cm.tab10.colors
 
     # -------------------------------
