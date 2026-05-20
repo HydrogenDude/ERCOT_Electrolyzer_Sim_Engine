@@ -81,11 +81,11 @@ plt.rcParams.update({
 plt.figure(figsize=(7, 4))
 plt.grid(True, alpha=0.25)
 
-plt.plot(P_V, V_stack, 'D', color='tab:blue', linestyle='None', label='Voltage')
-plt.plot(P_I, I_stack, 'o', color='tab:orange', linestyle='None', label='Current')
+plt.plot(P_V, V_stack, 'D', color='tab:blue', linestyle='None')
+plt.plot(P_I, I_stack, 'o', color='tab:orange', linestyle='None')
 
-plt.plot(P_V_smooth, V_stack_fit, color='tab:blue', linewidth=3, label='Voltage PCHIP fit')
-plt.plot(P_I_smooth, I_stack_fit, color='tab:orange', linewidth=3, label='Current PCHIP fit')
+plt.plot(P_V_smooth, V_stack_fit, color='tab:blue', linewidth=3, label='Voltage')
+plt.plot(P_I_smooth, I_stack_fit, color='tab:orange', linewidth=3, label='Current')
 
 plt.xlabel('Stack Power, $P_{\\mathrm{stack}}$ (kW)')
 plt.ylabel('Stack Voltage (V) / Current (A)')
