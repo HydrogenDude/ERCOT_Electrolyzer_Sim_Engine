@@ -8,6 +8,14 @@ import tkinter as tk
 from tkinter import filedialog
 
 # ==================================================
+# SETTINGS (NEW)
+# ==================================================
+
+ENABLE_SMOOTHING = False
+SMOOTH_WINDOW_DAYS = 2
+TIME_STEP_MIN = 15  # minutes
+
+# ==================================================
 # CONTROL PARAMETERS
 # ==================================================
 
@@ -68,15 +76,12 @@ def normalize_clean(values):
     vals = values.copy()
     norm = np.zeros_like(vals, dtype=float)
 
-    # Red (stop)
     mask1 = vals <= clean_stop
     norm[mask1] = 0.0
 
-    # Yellow region
     mask2 = (vals > clean_stop) & (vals <= clean_turndown)
     norm[mask2] = (vals[mask2] - clean_stop) / (clean_turndown - clean_stop) * 0.5
 
-    # Green region
     mask3 = vals > clean_turndown
     norm[mask3] = 0.5 + (vals[mask3] - clean_turndown) / (1 - clean_turndown) * 0.5
 
@@ -87,19 +92,32 @@ def normalize_price(values):
     vals = values.copy()
     norm = np.zeros_like(vals, dtype=float)
 
-    # Red (high price)
     mask1 = vals >= price_stop
     norm[mask1] = 0.0
 
-    # Yellow region
     mask2 = (vals >= price_turndown) & (vals < price_stop)
     norm[mask2] = 0.5 - (vals[mask2] - price_turndown) / (price_stop - price_turndown) * 0.5
 
-    # Green (low price)
     mask3 = vals < price_turndown
     norm[mask3] = 0.5 + (price_turndown - vals[mask3]) / price_turndown * 0.5
 
     return np.clip(norm, 0, 1)
+
+# ==================================================
+# SMOOTHING (NEW)
+# ==================================================
+
+def get_window_size(days):
+    steps_per_day = int(24 * 60 / TIME_STEP_MIN)
+    return days * steps_per_day
+
+
+def smooth_series(values, window):
+    return pd.Series(values).rolling(
+        window=window,
+        center=True,
+        min_periods=1
+    ).mean().values
 
 # ==================================================
 # COLORMAP
@@ -137,32 +155,11 @@ def plot_heatmap(time, norm_vals, ylabel):
         interpolation='nearest'
     )
 
-    # ==========================
     # AXIS FORMATTING
-    # ==========================
-
-    # No title
-    # No x-label
-    #ax.set_xlabel("")
-
-    # ✅ Y-axis label only
     ax.set_ylabel(ylabel, fontsize=14)
-    #ax.yaxis.set_label_coords(-0.038, 0.5)
-
-    # No y ticks
     ax.set_yticks([])
     ax.set_xticks([])
-
     ax.set_xlim(t_vals[0], t_vals[-1])
-
-    # Year ticks only
-    #ax.xaxis.set_major_locator(mdates.YearLocator())
-    #ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-
-    ax.tick_params(labelsize=12)
-
-    # Light vertical grid
-    #ax.grid(True, axis='x', alpha=0.3)
 
     plt.tight_layout()
     plt.subplots_adjust(left=0.059)
@@ -181,9 +178,18 @@ def run():
 
     df = load_data(path)
 
+    # Normalize
     clean_norm = normalize_clean(df["clean_ratio"].values)
     price_norm = normalize_price(df["energy_price"].values)
 
+    # ✅ Apply smoothing if enabled
+    if ENABLE_SMOOTHING:
+        window = get_window_size(SMOOTH_WINDOW_DAYS)
+
+        clean_norm = smooth_series(clean_norm, window)
+        price_norm = smooth_series(price_norm, window)
+
+    # Plot
     plot_heatmap(df["time"], clean_norm, "CR")
     plot_heatmap(df["time"], price_norm, "$/MWh")
 

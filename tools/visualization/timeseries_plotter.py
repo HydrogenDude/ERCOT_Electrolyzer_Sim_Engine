@@ -112,7 +112,7 @@ def select_time_range(df):
 
     if choice == "2":
         start = pd.to_datetime("2025-04-16")
-        end = pd.to_datetime("2025-04-20")
+        end = pd.to_datetime("2025-04-21")
 
     elif choice == "3":
         start = pd.to_datetime(input("Start date (YYYY-MM-DD): "))

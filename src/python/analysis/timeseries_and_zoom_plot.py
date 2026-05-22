@@ -91,7 +91,7 @@ def plot_full(df, cfg):
     zoom_start = pd.to_datetime(ZOOM_RANGE[0])
     zoom_end = pd.to_datetime(ZOOM_RANGE[1])
 
-    fig, ax = plt.subplots(figsize=(12, 4))
+    fig, ax = plt.subplots(figsize=(12, 3))
 
     ax.plot(df["time"], df[col1],
             color="blue", alpha=0.2, linewidth=1.8)

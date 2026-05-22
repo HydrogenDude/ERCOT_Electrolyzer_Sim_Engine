@@ -16,7 +16,7 @@ stack = electrolyzer_system.stack;
 %% ======================================================
 %   SIMULATION WINDOW
 %  ======================================================
-run_mode = "year";
+run_mode = "all";
 years_to_simulate = 2025;
 
 switch run_mode

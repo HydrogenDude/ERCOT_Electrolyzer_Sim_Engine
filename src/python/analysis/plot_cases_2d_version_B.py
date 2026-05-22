@@ -6,10 +6,19 @@ from pathlib import Path
 import re
 import tkinter as tk
 from tkinter import filedialog
+import pandas as pd
+
+# ==================================================
+# SETTINGS
+# ==================================================
+
+ENABLE_SMOOTHING = False
+SMOOTH_WINDOW_N = 5   # simple moving average in sample space
 
 # ==================================================
 # CONSTANTS
 # ==================================================
+
 HHV_H2_KWH_PER_KG = 39.4
 
 P_LOW  = 0
@@ -24,6 +33,7 @@ GROUP_FILTER = {
 # ==================================================
 # PROJECT ROOT
 # ==================================================
+
 def get_project_root() -> Path:
     for parent in Path(__file__).resolve().parents:
         if (parent / ".project-root").exists():
@@ -37,6 +47,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 # =====================================================
 # FILE SELECTION
 # =====================================================
+
 def select_h5_files():
     root = tk.Tk()
     root.withdraw()
@@ -57,6 +68,7 @@ if not h5_files:
 # =====================================================
 # FILENAME PARSING
 # =====================================================
+
 pattern = re.compile(
     r"N(?P<N>\d+)_S(?P<S>\d+)_D(?P<D>on|off)_(?P<year>\d{4})",
     re.IGNORECASE,
@@ -72,6 +84,7 @@ def dataset_selected(data, filters):
 # =====================================================
 # LOAD DATA
 # =====================================================
+
 all_eff, all_co2, all_cost, all_startups = [], [], [], []
 
 for file in h5_files:
@@ -119,15 +132,28 @@ co2_all = np.concatenate(all_co2)
 cost_all = np.concatenate(all_cost)
 startups_all = np.concatenate(all_startups)
 
+# =====================================================
+# OPTIONAL SMOOTHING
+# =====================================================
+
+def smooth(arr, window):
+    return pd.Series(arr).rolling(window, center=True, min_periods=1).mean().values
+
+if ENABLE_SMOOTHING:
+    eff_all = smooth(eff_all, SMOOTH_WINDOW_N)
+    co2_all = smooth(co2_all, SMOOTH_WINDOW_N)
+    cost_all = smooth(cost_all, SMOOTH_WINDOW_N)
+
 # Default point
-eff_def = all_eff[0][0]
-co2_def = all_co2[0][0]
-cost_def = all_cost[0][0]
-startups_def = all_startups[0][0]
+eff_def = eff_all[0]
+co2_def = co2_all[0]
+cost_def = cost_all[0]
+startups_def = startups_all[0]
 
 # =====================================================
 # FILTER
 # =====================================================
+
 eff_lo, eff_hi = np.percentile(eff_all, [P_LOW, P_HIGH])
 co2_lo, co2_hi = np.percentile(co2_all, [P_LOW, P_HIGH])
 cost_lo, cost_hi = np.percentile(cost_all, [P_LOW, P_HIGH])
@@ -141,6 +167,7 @@ mask = (
 # =====================================================
 # COLOR
 # =====================================================
+
 vmin = np.percentile(startups_all, 1)
 vmax = np.percentile(startups_all, 99)
 norm = Normalize(vmin=vmin, vmax=vmax)
@@ -149,6 +176,7 @@ cmap = plt.get_cmap("turbo")
 # =====================================================
 # STYLE
 # =====================================================
+
 plt.rcParams.update({
     "font.size": 11,
     "axes.labelsize": 14,
@@ -157,14 +185,12 @@ plt.rcParams.update({
 })
 
 # =====================================================
-# PLOTTING FUNCTION ✅ FIXED
+# PLOTTING FUNCTION
 # =====================================================
+
 def create_plot(x, y, xlabel, ylabel, filename, x_def, y_def):
 
     fig, ax = plt.subplots(figsize=(7, 4))
-
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
 
     sc = ax.scatter(
         x[mask],
@@ -176,38 +202,40 @@ def create_plot(x, y, xlabel, ylabel, filename, x_def, y_def):
         alpha=0.5
     )
 
-    # ✅ Correct default point
+    # Default case marker
     default_color = cmap(norm(startups_def))
     ax.scatter(
-        x_def,
-        y_def,
+        x_def, y_def,
         c=[default_color],
         s=180,
         marker='X',
         edgecolors='black',
-        linewidths=2.5,
+        linewidths=2,
         zorder=100
     )
 
+    # Optional reference lines
+    ax.axvline(x_def, linestyle='--', alpha=0.3, color='black')
+    ax.axhline(y_def, linestyle='--', alpha=0.3, color='black')
+
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.25)
 
-    ax.grid(True, color='gray', alpha=0.25)
-
-    # ✅ Better colorbar spacing
+    # Colorbar (tight + left)
     plt.subplots_adjust(left=0.18)
     cbar_ax = fig.add_axes([0.11, 0.22, 0.025, 0.58])
     cbar = fig.colorbar(sc, cax=cbar_ax)
     cbar.set_label("Electrolyzer Startups")
 
     plt.tight_layout(rect=[0.20, 0, 1, 1])
-    fig.savefig(OUTPUT_DIR / filename, bbox_inches='tight', dpi=600)
+    fig.savefig(OUTPUT_DIR / filename, dpi=600)
 
 # =====================================================
-# CREATE PLOTS ✅
+# CREATE PLOTS
 # =====================================================
 
-# 1. Efficiency vs Cost
+# Efficiency vs Cost
 create_plot(
     eff_all, cost_all,
     "HHV Efficiency (%)",
@@ -216,7 +244,7 @@ create_plot(
     eff_def, cost_def
 )
 
-# 2. Efficiency vs CO2
+# Efficiency vs CO₂
 create_plot(
     eff_all, co2_all,
     "HHV Efficiency (%)",
@@ -225,14 +253,14 @@ create_plot(
     eff_def, co2_def
 )
 
-# ✅ 3. NEW: CO2 vs Cost
+# ✅ FINAL TARGET: COST vs CO2 (MOST IMPORTANT PLOT)
 create_plot(
-    co2_all, cost_all,
-    "CO$_2$ per H$_2$ (kg/kg)",
+    cost_all, co2_all,
     "Cost per H$_2$ (USD/kg)",
-    "co2_vs_cost_clean.pdf",
-    co2_def, cost_def
+    "CO$_2$ per H$_2$ (kg CO$_2$/kg H$_2$)",
+    "cost_vs_co2_clean.pdf",
+    cost_def, co2_def
 )
 
-print(f"\n✅ Saved styled plots to: {OUTPUT_DIR}")
+print(f"\n✅ Saved plots to: {OUTPUT_DIR}")
 plt.show()
