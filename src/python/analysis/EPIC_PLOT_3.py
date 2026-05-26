@@ -178,24 +178,27 @@ def plot_combined(df, cfg):
     ax = axes_main[0]
 
     line1, = ax.plot(time, df[cfg["col1"]],
-                     color="blue", alpha=0.3, linewidth=0.1)
+                     color="blue", alpha=0.3, linewidth=0.1, zorder=1)
 
     line2, = ax.plot(time, df[cfg["col2"]],
-                     color="orange", linewidth=1.5)
+                     color="orange", linewidth=1.5, zorder=2)
 
     ax.fill_between(time, df[cfg["col2"]], 0,
-                    color="orange", alpha=0.5, linewidth=0)
+                    color="orange", alpha=0.75, linewidth=0, zorder=3)
 
     ax.set_ylabel(cfg["ylabel"], fontsize=PLOT_CONFIG["axis_label_size"])
     ax.set_ylim(0, 80)
     ax.grid(True, alpha=0.25)
 
-    ax.legend(
+    leg = ax.legend(
         [line1, line2],
         [cfg["label1"], cfg["label2"]],
         fontsize=PLOT_CONFIG["legend_size"],
         loc="upper right"
     )
+
+    for legline in leg.get_lines():
+        legline.set_linewidth(1.8)
 
     # ----------------------
     # CLEAN RATIO (MAIN)
@@ -281,9 +284,10 @@ def plot_combined(df, cfg):
 
     # ----------------------
     # AXES FORMAT
-    # ----------------------
-    axes_main[-1].xaxis.set_major_locator(mdates.YearLocator())
-    axes_main[-1].xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    for ax in axes_main:
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+
 
     for ax in axes_main:
         ax.tick_params(labelsize=PLOT_CONFIG["tick_label_size"])
@@ -292,7 +296,15 @@ def plot_combined(df, cfg):
     for ax in axes_main[:-1]:
         ax.tick_params(labelbottom=False)
 
-    plt.tight_layout()
+    plt.subplots_adjust(
+        left=0.03,
+        right=0.98,
+        bottom=0.10,
+        top=0.95,
+        hspace=0.03,   # ✅ tighter vertical spacing
+        wspace=0.02
+    )
+
     plt.show()
 
 
