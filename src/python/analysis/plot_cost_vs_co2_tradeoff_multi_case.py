@@ -133,4 +133,5 @@ cbar.ax.tick_params(labelsize=14)
 # ==================================================
 
 plt.tight_layout()
+plt.subplots_adjust(right=0.88)
 plt.show()

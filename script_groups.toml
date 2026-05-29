@@ -1,0 +1,38 @@
+[matlab_simulation]
+language = "MATLAB"
+files = [
+    # Entry points
+    "src/matlab/startup.m",
+    "src/matlab/sim/run_sim.m",
+    "src/matlab/sim/post_sim.m",
+
+    # IO — inputs
+    "src/matlab/io/load_inputs.m",
+    "src/matlab/io/load_supervisory_control_cases.m",
+    "src/matlab/io/load_inputs_and_cases.m",
+
+    # Engine — signals and emissions
+    "src/matlab/engine/compute_clean_energy_ratio.m",
+    "src/matlab/engine/compute_electricity_cost.m",
+    "src/matlab/engine/compute_grid_emissions_kernel.m",
+    "src/matlab/engine/electrolyzer_emissions_from_kernel.m",
+
+    # Models — system definition and state
+    "src/matlab/models/define_electrolyzer_system.m",
+    "src/matlab/models/initialize_electrolyzer_system_state.m",
+    "src/matlab/models/update_electrolyzer_system_state.m",
+
+    # IO — results output
+    "src/matlab/io/init_results_hdf5_chunked.m",
+    "src/matlab/io/write_results_hdf5_chunk.m",
+    "src/matlab/io/export_results_hdf5_chunked.m",
+    "src/matlab/io/export_results_timeseries.m",
+
+    # Utils and tools
+    "src/matlab/utils/get_project_root.m",
+    "src/matlab/utils/safe_divide.m",
+    "src/matlab/tools/printStructStructure.m",
+
+    # Teardown
+    "src/matlab/shutdown.m",
+]

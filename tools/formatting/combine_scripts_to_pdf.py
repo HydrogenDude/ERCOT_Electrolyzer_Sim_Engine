@@ -10,10 +10,10 @@ from reportlab.lib.units import inch
 # ------------------------------------------------------------
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 
-CONFIG_FILE = os.path.join(ROOT_DIR, "configs/script_groups.toml")
-EXPORT_DIR = os.path.join(ROOT_DIR, "exports", "pdf")
+CONFIG_FILE = os.path.join(ROOT_DIR, "script_groups.toml")
+EXPORT_DIR = os.path.join(ROOT_DIR, "outputs", "exports")
 
 PAGE_WIDTH, PAGE_HEIGHT = LETTER
 LEFT_MARGIN = 0.75 * inch
