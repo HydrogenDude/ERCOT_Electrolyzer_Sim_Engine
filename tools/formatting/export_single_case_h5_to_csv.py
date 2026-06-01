@@ -20,6 +20,15 @@ import pandas as pd
 from pathlib import Path
 
 
+# ----------------------------------------------------
+# Safe division helper
+# ----------------------------------------------------
+def safe_div(num, denom, fill=np.nan):
+    """Return num/denom, or fill wherever denom is zero."""
+    num   = np.asarray(num,   dtype=float)
+    denom = np.asarray(denom, dtype=float)
+    return np.where(denom != 0, num / denom, fill)
+
 
 # ----------------------------------------------------
 # Project root detection
@@ -30,17 +39,18 @@ def get_project_root() -> Path:
             return parent
     raise RuntimeError("Project root not found.")
 
+
 # ----------------------------------------------------
 # Paths
 # ----------------------------------------------------
 PROJECT_ROOT = get_project_root()
-h5_file = PROJECT_ROOT / "outputs" / "results" / "default_case.h5"
-csv_file = PROJECT_ROOT / "outputs" / "tables" / "default_case.csv"
+h5_file  = PROJECT_ROOT / "outputs" / "results" / "clean_case.h5"
+csv_file = PROJECT_ROOT / "outputs" / "tables"  / "clean_case.csv"
 price_file = PROJECT_ROOT / "data" / "inputs" / "price.txt"
 
 
 # ----------------------------------------------------
-# Load HDF5 (UNCHANGED)
+# Load HDF5
 # ----------------------------------------------------
 with h5py.File(h5_file, "r") as f:
 
@@ -66,32 +76,26 @@ dt_hr = (time[1] - time[0]).total_seconds() / 3600.0
 
 
 # ----------------------------------------------------
-# Build base DataFrame (UNCHANGED LOGIC)
+# Build base DataFrame
 # ----------------------------------------------------
 df_ts = pd.DataFrame({
-    "time": time,
+    "time":      time,
     "P_grid_kW": P_grid_kW,
-    "h2_kgph": h2_kgph,
+    "h2_kgph":   h2_kgph,
     "cost_signal": cost_ts,
-    "co2_kg": co2_ts,
+    "co2_kg":    co2_ts,
 })
 
 
 # ----------------------------------------------------
-# ✅ NEW: Load and align price data by timestamp
+# Load and align price data by timestamp
 # ----------------------------------------------------
 price_df = pd.read_csv(price_file)
-
-# Parse timestamps
 price_df["time"] = pd.to_datetime(price_df["Timestamp"])
-
-# Ensure column name consistency
 price_df = price_df.rename(columns={"Price": "price_per_MWh"})
 
-# Merge on time (THIS IS THE KEY FIX)
 df_ts = df_ts.merge(price_df[["time", "price_per_MWh"]], on="time", how="left")
 
-# ✅ Check for missing matches
 if df_ts["price_per_MWh"].isna().any():
     missing_frac = df_ts["price_per_MWh"].isna().mean()
     raise ValueError(
@@ -100,15 +104,18 @@ if df_ts["price_per_MWh"].isna().any():
 
 
 # ----------------------------------------------------
-# Continue normal processing
+# Derived columns
 # ----------------------------------------------------
-df_ts["year"] = df_ts["time"].dt.year
+df_ts["year"]       = df_ts["time"].dt.year
 df_ts["energy_MWh"] = df_ts["P_grid_kW"] * dt_hr / 1000
-df_ts["h2_kg"] = df_ts["h2_kgph"] * dt_hr
-df_ts["operating"] = df_ts["P_grid_kW"] > 0
+df_ts["h2_kg"]      = df_ts["h2_kgph"] * dt_hr
+df_ts["operating"]  = df_ts["P_grid_kW"] > 0
+df_ts["cost_$"]     = df_ts["energy_MWh"] * df_ts["price_per_MWh"]
 
-# ✅ TRUE cost using price
-df_ts["cost_$"] = df_ts["energy_MWh"] * df_ts["price_per_MWh"]
+# co2 per kg h2 — zero-safe
+df_ts["co2_per_h2"] = safe_div(df_ts["co2_kg"].values,
+                                df_ts["h2_kg"].values,
+                                fill=0.0)
 
 
 # ----------------------------------------------------
@@ -128,27 +135,34 @@ run_tbl = (
     )
     .reset_index()
 )
-
 run_tbl["duration_hr"] = run_tbl["duration_steps"] * dt_hr
 
 
 # ----------------------------------------------------
-# Price metrics (NOW FULLY CORRECT)
+# Price metrics
 # ----------------------------------------------------
+def year_price_metrics(g):
+    on_mask  = g["operating"]
+    off_mask = ~g["operating"]
+
+    weights = g.loc[on_mask, "energy_MWh"].values
+    prices  = g.loc[on_mask, "price_per_MWh"].values
+
+    # weighted mean price when ON — safe against zero total weight
+    if on_mask.any() and weights.sum() > 0:
+        mean_on = np.average(prices, weights=weights)
+    else:
+        mean_on = np.nan
+
+    mean_off = g.loc[off_mask, "price_per_MWh"].mean() \
+               if off_mask.any() else np.nan
+
+    return pd.Series({"mean_price_on": mean_on, "mean_price_off": mean_off})
+
 price_metrics = (
     df_ts
     .groupby("year")
-    .apply(lambda g: pd.Series({
-
-        "mean_price_on":
-            np.average(
-                g.loc[g["operating"], "price_per_MWh"],
-                weights=g.loc[g["operating"], "energy_MWh"]
-            ) if g["operating"].any() else np.nan,
-
-        "mean_price_off":
-            g.loc[~g["operating"], "price_per_MWh"].mean()
-    }))
+    .apply(year_price_metrics)
     .reset_index()
 )
 
@@ -156,23 +170,25 @@ price_metrics = (
 # ----------------------------------------------------
 # Duration + startup metrics
 # ----------------------------------------------------
+def year_duration_metrics(g):
+    on_runs  = g.loc[g["operating"]]
+    off_runs = g.loc[~g["operating"]]
+    n_starts = int(g["operating"].sum())
+
+    return pd.Series({
+        "mean_on_duration_hr":  on_runs["duration_hr"].mean()
+                                if not on_runs.empty else np.nan,
+        "mean_off_duration_hr": off_runs["duration_hr"].mean()
+                                if not off_runs.empty else np.nan,
+        "startups":             n_starts,
+        "h2_per_startup_kg":    safe_div(on_runs["h2_kg"].sum(),
+                                         n_starts, fill=0.0).item(),
+    })
+
 duration_metrics = (
     run_tbl
     .groupby("year")
-    .apply(lambda g: pd.Series({
-        "mean_on_duration_hr":
-            g.loc[g["operating"], "duration_hr"].mean(),
-
-        "mean_off_duration_hr":
-            g.loc[~g["operating"], "duration_hr"].mean(),
-
-        "startups":
-            int(g["operating"].sum()),
-
-        "h2_per_startup_kg":
-            g.loc[g["operating"], "h2_kg"].sum() /
-            max(1, int(g["operating"].sum()))
-    }))
+    .apply(year_duration_metrics)
     .reset_index()
 )
 
@@ -180,7 +196,7 @@ duration_metrics = (
 # ----------------------------------------------------
 # Yearly aggregation
 # ----------------------------------------------------
-P_rated_kW = df_ts["P_grid_kW"].max()
+P_rated_kW = df_ts["P_grid_kW"].max()  # may be 0 if system never ran
 
 yearly = (
     df_ts
@@ -197,12 +213,30 @@ yearly = (
 )
 
 yearly["hours"] = yearly["total_steps"] * dt_hr
-yearly["capacity_factor"] = yearly["energy_MWh"] / (
-    P_rated_kW * yearly["hours"] / 1000
+
+yearly["capacity_factor"] = safe_div(
+    yearly["energy_MWh"].values,
+    P_rated_kW * yearly["hours"].values / 1000,
+    fill=0.0
 )
-yearly["utilization_rate"] = yearly["operating_hours"] / yearly["total_steps"]
-yearly["cost_per_kg_h2"] = yearly["cost"] / yearly["h2_kg"]
-yearly["co2_intensity_kg_per_kg_h2"] = yearly["co2_kg"] / yearly["h2_kg"]
+
+yearly["utilization_rate"] = safe_div(
+    yearly["operating_hours"].values,
+    yearly["total_steps"].values,
+    fill=0.0
+)
+
+yearly["cost_per_kg_h2"] = safe_div(
+    yearly["cost"].values,
+    yearly["h2_kg"].values,
+    fill=np.nan
+)
+
+yearly["co2_intensity_kg_per_kg_h2"] = safe_div(
+    yearly["co2_kg"].values,
+    yearly["h2_kg"].values,
+    fill=np.nan
+)
 
 
 # ----------------------------------------------------
@@ -210,7 +244,7 @@ yearly["co2_intensity_kg_per_kg_h2"] = yearly["co2_kg"] / yearly["h2_kg"]
 # ----------------------------------------------------
 yearly = (
     yearly
-    .merge(price_metrics, on="year", how="left")
+    .merge(price_metrics,    on="year", how="left")
     .merge(duration_metrics, on="year", how="left")
 )
 
@@ -218,46 +252,43 @@ yearly = (
 # ----------------------------------------------------
 # Totals
 # ----------------------------------------------------
-weighted_utilization = np.average(
-    yearly["utilization_rate"],
-    weights=yearly["hours"]
+total_hours   = yearly["hours"].sum()
+total_h2_kg   = yearly["h2_kg"].sum()
+total_energy  = yearly["energy_MWh"].sum()
+total_cost    = yearly["cost"].sum()
+total_co2     = yearly["co2_kg"].sum()
+
+weighted_utilization = (
+    np.average(yearly["utilization_rate"], weights=yearly["hours"])
+    if yearly["hours"].sum() > 0 else np.nan
 )
 
 totals = pd.DataFrame([{
-
-    "h2_kg": yearly["h2_kg"].sum(),
-    "co2_kg": yearly["co2_kg"].sum(),
-    "energy_MWh": yearly["energy_MWh"].sum(),
-    "cost": yearly["cost"].sum(),
-
-    "capacity_factor":
-        yearly["energy_MWh"].sum() /
-        (P_rated_kW * yearly["hours"].sum() / 1000),
-
-    "utilization_rate": weighted_utilization,
-
-    "cost_per_kg_h2":
-        yearly["cost"].sum() / yearly["h2_kg"].sum(),
-
-    "co2_intensity_kg_per_kg_h2":
-        yearly["co2_kg"].sum() / yearly["h2_kg"].sum(),
-
-    "mean_price_on": yearly["mean_price_on"].mean(),
-    "mean_price_off": yearly["mean_price_off"].mean(),
-
-    "mean_on_duration_hr": yearly["mean_on_duration_hr"].mean(),
-    "mean_off_duration_hr": yearly["mean_off_duration_hr"].mean(),
-
-    "startups_per_year": yearly["startups"].mean(),
-    "startups_total": startups_total,
-
-    "h2_per_startup_kg": yearly["h2_per_startup_kg"].mean(),
+    "h2_kg":                     total_h2_kg,
+    "co2_kg":                    total_co2,
+    "energy_MWh":                total_energy,
+    "cost":                      total_cost,
+    "capacity_factor":           safe_div(total_energy,
+                                          P_rated_kW * total_hours / 1000,
+                                          fill=0.0).item(),
+    "utilization_rate":          weighted_utilization,
+    "cost_per_kg_h2":            safe_div(total_cost,   total_h2_kg, fill=np.nan).item(),
+    "co2_intensity_kg_per_kg_h2":safe_div(total_co2,    total_h2_kg, fill=np.nan).item(),
+    "mean_price_on":             yearly["mean_price_on"].mean(),
+    "mean_price_off":            yearly["mean_price_off"].mean(),
+    "mean_on_duration_hr":       yearly["mean_on_duration_hr"].mean(),
+    "mean_off_duration_hr":      yearly["mean_off_duration_hr"].mean(),
+    "startups_per_year":         yearly["startups"].mean(),
+    "startups_total":            startups_total,
+    "h2_per_startup_kg":         yearly["h2_per_startup_kg"].mean(),
 }])
 
 
 # ----------------------------------------------------
 # Write CSV
 # ----------------------------------------------------
+csv_file.parent.mkdir(parents=True, exist_ok=True)
+
 with open(csv_file, "w", newline="") as f:
     f.write("# --- totals ---\n")
     totals.to_csv(f, index=False)
@@ -267,7 +298,6 @@ with open(csv_file, "w", newline="") as f:
 
     f.write("\n# --- time_series ---\n")
     df_ts.drop(columns=["year"]).to_csv(f, index=False)
-
 
 print("[OK] Export complete")
 print(f"     File: {csv_file}")

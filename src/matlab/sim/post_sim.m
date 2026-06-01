@@ -1,29 +1,119 @@
-%% Calculate Moving Averages
-% Inputs
-P_grid_kW = results.sim.P_grid_kW;
-h2_kgph = results.sim.h2_kgph;
-electricity_price = signals.price;
-clean_ratio = signals.clean_ratio;
-co2_kg = results.emissions.co2_kg_per_timestep;
-co2_kg_per_h2_kg = results.emissions.co2_per_kg_h2_timestep;
-cost = results.sim.cost;
+%% ======================================================
+%   LOAD FROM HDF5
+%  ======================================================
+project_root = get_project_root();
+outFile = fullfile(project_root, 'outputs', 'results', 'results_timeseries.h5');
+
+P_grid_kW = h5read(outFile, '/sim/P_grid_kW');
+h2_kgph   = h5read(outFile, '/sim/h2_kgph');
+cost      = h5read(outFile, '/sim/cost');
+co2_kg    = h5read(outFile, '/emissions/co2_kg_per_timestep');
+time_raw  = h5read(outFile, '/time');
+
+% Flatten and convert datenum -> datetime
+time = datetime(time_raw(:), 'ConvertFrom', 'datenum');
+
+% Align signals to sim window
+electricity_price = signals.price(sim_steps);
+clean_ratio       = signals.clean_ratio(sim_steps);
+
+% Per-step derived quantities
 e_MWh = P_grid_kW * 0.25 / 1000;
-h2_kg = h2_kgph * 0.25;
+h2_kg = h2_kgph   * 0.25;
 
-%% Calculate Moving Averages (D-day window)
+% co2 per kg h2 (guard against divide-by-zero)
+co2_kg_per_h2_kg = zeros(size(co2_kg));
+mask = h2_kg > 0;
+co2_kg_per_h2_kg(mask) = co2_kg(mask) ./ h2_kg(mask);
 
-D = 14; % <-- change this to any number of days you want
+%% ======================================================
+%   MOVING AVERAGES
+%  ======================================================
+D               = 14;
+samples_per_day = 24 * 4;
+window          = D * samples_per_day;
 
-samples_per_day = 24 * 4;     % 15-min timesteps → 96 per day
-window = D * samples_per_day; % total samples in window
-
-% Trailing moving averages (causal)
-P_grid_kW_avg      = movmean(P_grid_kW,      [window-1 0]);
-h2_kgph_avg        = movmean(h2_kgph,        [window-1 0]);
+P_grid_kW_avg         = movmean(P_grid_kW,         [window-1 0]);
+h2_kgph_avg           = movmean(h2_kgph,           [window-1 0]);
 electricity_price_avg = movmean(electricity_price, [window-1 0]);
-clean_ratio_avg    = movmean(clean_ratio,    [window-1 0]);
-co2_kg_avg    = movmean(co2_kg,    [window-1 0]);
-co2_kg_per_h2_kg_avg   = movmean(co2_kg_per_h2_kg,    [window-1 0]);
-cost_avg = movmean(cost, [window-1 0]);
-e_MWh_avg = movmean(e_MWh, [window-1 0]);
-h2_kg_avg = movmean(h2_kg, [window-1 0]);
+clean_ratio_avg       = movmean(clean_ratio,       [window-1 0]);
+co2_kg_avg            = movmean(co2_kg,            [window-1 0]);
+co2_kg_per_h2_kg_avg  = movmean(co2_kg_per_h2_kg, [window-1 0]);
+cost_avg              = movmean(cost,              [window-1 0]);
+e_MWh_avg             = movmean(e_MWh,             [window-1 0]);
+h2_kg_avg             = movmean(h2_kg,             [window-1 0]);
+
+%% ======================================================
+%   FORCE COLUMN VECTORS
+%  ======================================================
+time              = time(:);
+clean_ratio       = clean_ratio(:);
+electricity_price = electricity_price(:);
+P_grid_kW         = P_grid_kW(:);
+e_MWh             = e_MWh(:);
+cost              = cost(:);
+h2_kgph           = h2_kgph(:);
+h2_kg             = h2_kg(:);
+co2_kg            = co2_kg(:);
+co2_kg_per_h2_kg  = co2_kg_per_h2_kg(:);
+clean_ratio_avg       = clean_ratio_avg(:);
+electricity_price_avg = electricity_price_avg(:);
+P_grid_kW_avg         = P_grid_kW_avg(:);
+e_MWh_avg             = e_MWh_avg(:);
+cost_avg              = cost_avg(:);
+h2_kgph_avg           = h2_kgph_avg(:);
+h2_kg_avg             = h2_kg_avg(:);
+co2_kg_avg            = co2_kg_avg(:);
+co2_kg_per_h2_kg_avg  = co2_kg_per_h2_kg_avg(:);
+
+%% ======================================================
+%   ASSEMBLE TABLE
+%  ======================================================
+T = table( ...
+    time,                     ...
+    clean_ratio,              ...
+    electricity_price,        ...
+    P_grid_kW,                ...
+    e_MWh,                    ...
+    cost,                     ...
+    h2_kgph,                  ...
+    h2_kg,                    ...
+    co2_kg,                   ...
+    co2_kg_per_h2_kg,         ...
+    clean_ratio_avg,          ...
+    electricity_price_avg,    ...
+    P_grid_kW_avg,            ...
+    e_MWh_avg,                ...
+    cost_avg,                 ...
+    h2_kgph_avg,              ...
+    h2_kg_avg,                ...
+    co2_kg_avg,               ...
+    co2_kg_per_h2_kg_avg,     ...
+    'VariableNames', {        ...
+        'time',               ...
+        'clean_ratio',        ...
+        'energy_price',       ...
+        'System Power (kW)',  ...
+        'e_MWh',              ...
+        'cost',               ...
+        'h2_kgph',            ...
+        'h2_kg',              ...
+        'co2_kg',             ...
+        'co2_per_h2',         ...
+        'clean_ratio_avg',    ...
+        'energy_price_avg',   ...
+        'System Power Avg (kW)', ...
+        'e_MWh_avg',          ...
+        'cost_avg',           ...
+        'h2_kgph_avg',        ...
+        'h2_kg_avg',          ...
+        'co2_kg_avg',         ...
+        'co2_per_h2_avg'      ...
+    });
+
+%% ======================================================
+%   WRITE TO CSV
+%  ======================================================
+outCsv = fullfile(project_root, 'outputs', 'tables', 'results_timeseries.csv');
+writetable(T, outCsv);
+fprintf('Table written to %s\n', outCsv);

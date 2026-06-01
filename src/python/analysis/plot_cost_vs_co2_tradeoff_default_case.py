@@ -42,6 +42,7 @@ def get_project_root() -> Path:
 
 PROJECT_ROOT = get_project_root()
 H5_PATH = PROJECT_ROOT / "outputs" / "results" / "default_case.h5"
+#H5_PATH = PROJECT_ROOT / "outputs" / "results" / "clean_case.h5"
 
 print(f"\nLoading: {H5_PATH}")
 

@@ -21,7 +21,7 @@ def get_project_root() -> Path:
 # ==========================================================
 # Default supervisory control case (ALWAYS ID = 1)
 # ==========================================================
-
+"""
 def default_supervisory_control_case() -> pd.DataFrame:
     row = {
         "ID": 1,
@@ -38,26 +38,26 @@ def default_supervisory_control_case() -> pd.DataFrame:
         "price_delay": 2,
     }
     return pd.DataFrame([row])
+"""
 
 
-"""    
 def default_supervisory_control_case() -> pd.DataFrame:
     row = {
         "ID": 1,
-        "min_up_steps": 4,
-        "min_down_steps": 2,
+        "min_up_steps": 0,
+        "min_down_steps": 0,
         "price_start": 30.0,
         "price_turndown": 50.0,
         "price_stop": 55.0,
-        "clean_ratio_start": 0.70,
-        "clean_ratio_turndown": 0.67,
+        "clean_ratio_start": 0.75,
+        "clean_ratio_turndown": 0.70,
         "clean_ratio_stop": 0.65,
-        "turndown_delay": 1,
-        "recover_delay": 6,
-        "price_delay": 2,
+        "turndown_delay": 0,
+        "recover_delay": 0,
+        "price_delay": 0,
     }
     return pd.DataFrame([row])
-"""
+
     
 # ==========================================================
 # Generate supervisory control cases

@@ -1,2 +1,2 @@
 ID,min_up_steps,min_down_steps,price_start,price_turndown,price_stop,clean_ratio_start,clean_ratio_turndown,clean_ratio_stop,turndown_delay,recover_delay,price_delay
-1,4.0,2.0,30.0,50.0,55.0,0.7,0.67,0.65,1.0,6.0,2.0
+1,0.0,0.0,30.0,50.0,55.0,0.75,0.7,0.65,0.0,0.0,0.0
