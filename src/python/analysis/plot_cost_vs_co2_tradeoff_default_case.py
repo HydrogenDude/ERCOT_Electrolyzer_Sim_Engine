@@ -138,7 +138,7 @@ ax.set_ylim(0, 60)
 # LABELS
 # ==================================================
 
-ax.set_xlabel("Cost per H$_2$ (USD/kg)", fontsize=FONT["labels"])
+ax.set_xlabel("Electricity Cost per H$_2$ (USD/kg)", fontsize=FONT["labels"])
 ax.set_ylabel("CO$_2$ per H$_2$ (kg/kg)", fontsize=FONT["labels"])
 
 # ==================================================

@@ -208,7 +208,7 @@ def plot_combined(df, cfg):
               aspect='auto', cmap=cmap, vmin=0, vmax=1,
               extent=[t_vals[0], t_vals[-1], 0, 1])
 
-    ax.set_ylabel("CR", fontsize=PLOT_CONFIG["axis_label_size"])
+    ax.set_ylabel("CER", fontsize=PLOT_CONFIG["axis_label_size"])
     ax.set_yticks([])
     ax.set_ylim(0, 1)
 
@@ -301,7 +301,7 @@ def plot_combined(df, cfg):
         right=0.98,
         bottom=0.10,
         top=0.95,
-        hspace=0.03,   # ✅ tighter vertical spacing
+        hspace=0.05,   # ✅ tighter vertical spacing
         wspace=0.02
     )
 

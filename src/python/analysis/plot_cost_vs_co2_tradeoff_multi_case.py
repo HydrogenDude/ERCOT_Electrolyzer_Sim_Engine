@@ -102,7 +102,7 @@ if SETTINGS["highlight_default"]:
 # AXES
 # ==================================================
 
-ax.set_xlabel("Cost per H$_2$ (USD/kg)")
+ax.set_xlabel("Electricity Cost per H$_2$ (USD/kg)")
 ax.set_ylabel("CO$_2$ per H$_2$ (kg/kg)")
 
 ax.grid(alpha=0.25)

@@ -133,10 +133,10 @@ fig1, ax1 = plt.subplots(figsize=FIG_SIZE)
 
 ax1.stackplot(
     df["Time"],
-    df["SMPS"],
     df["Chiller"],
     df["Subsystem"],
-    labels=["SMPS (AC)", "Chiller", "Subsystems"],
+    df["SMPS"],
+    labels=["Chiller", "Subsystems", "SMPS (AC)"],
     alpha=0.7
 )
 
