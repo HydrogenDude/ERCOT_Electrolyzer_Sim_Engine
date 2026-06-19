@@ -59,7 +59,7 @@ grid_coords = np.vstack([xx.ravel(), yy.ravel()])
 # PLOT
 # ==================================================
 
-fig, ax = plt.subplots(figsize=(6, 3))
+fig, ax = plt.subplots(figsize=(6, 2))
 
 ax.axhspan(11, 14, color='red', alpha=0.1, zorder=0)
 

@@ -311,6 +311,4 @@ ax.grid(alpha=0.25)
 ax.set_axisbelow(True)
 
 fig.tight_layout()
-fig.savefig(SAVE_FIG, dpi=300, bbox_inches="tight")
-print(f"\nFigure saved: {SAVE_FIG}")
 plt.show()
